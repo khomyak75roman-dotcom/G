@@ -1,0 +1,6 @@
+# Minimal dependencies for the keyless CLI generator.
+# The full OpenMontage setup is in requirements.txt / Makefile (make setup).
+requests>=2.31
+certifi>=2026.10.19
+edge-tts>=7.0
+Pillow>=10.0
