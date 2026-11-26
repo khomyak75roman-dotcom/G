@@ -10,6 +10,7 @@ Headless use (e.g. from a terminal):
 param(
     [string]$Topic,
     [string]$Out,
+    [string[]]$Sources = @('wikimedia', 'nasa', 'archive_org'),
     [switch]$Offline,
     [switch]$NoOpen
 )
@@ -54,6 +55,7 @@ if ([string]::IsNullOrWhiteSpace($Out)) {
 $env:PYTHONUTF8 = '1'
 
 $generatorArgs = @('-m', 'generator', $Topic, '--out', $Out, '--timeout', '90')
+if ($Sources -and $Sources.Count -gt 0) { $generatorArgs += @('--sources') + $Sources }
 if ($Offline) { $generatorArgs += '--offline' }
 
 Write-Host '==> OpenMontage: генерація відео'

@@ -63,7 +63,7 @@ python -m generator "city life in the rain" --dry-run
 
 ### Ярлик на робочому столі (Windows)
 
-На цій машині створено ярлик **OpenMontage Generator.lnk**: подвійний клік відкриває вікно вводу теми, генерує MP4 у `projects/desktop/` і відкриває готовий файл. Логіка — у `launch_generator.ps1` (корінь репозиторію); ярлик запускає його через PowerShell з `-ExecutionPolicy Bypass`. Щоб перестворити ярлик на іншій машині:
+На цій машині створено ярлик **OpenMontage Generator.lnk**: подвійний клік відкриває вікно вводу теми, генерує MP4 у `projects/desktop/` і відкриває готовий файл. Логіка — у `launch_generator.ps1` (корінь репозиторію); ярлик запускає його через PowerShell з `-ExecutionPolicy Bypass`. Типово використовуються джерела `wikimedia nasa archive_org` — вони працюють без ключів; якщо ваша мережа блокує інші сайти (наприклад `loc.gov` віддає Cloudflare 403), генератор усе одно збирає відео з локальних титрових сцен. Вибрати джерела можна параметром `-Sources wikimedia nasa`. Щоб перестворити ярлик на іншій машині:
 
 ```powershell
 $root = "C:\шлях\до\OpenMontage"
