@@ -14,10 +14,11 @@ Covers two issues raised on review of the initial subtitle-style fix:
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
-from pathlib import PurePosixPath, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
 
@@ -177,8 +178,20 @@ def test_textfile_path_punctuation_preserves_rendered_frame(tmp_path, directory)
     plain = _write_drawtext_textfile(tmp_path / "plain", text)
     special = _write_drawtext_textfile(tmp_path / directory, text)
 
+    # FFmpeg 9.x on Windows crashes when drawtext resolves a font family via
+    # fontconfig. Supply a concrete font file so the test exercises only the
+    # textfile path escaping it is meant to verify.
+    font_option = ""
+    if os.name == "nt":
+        system_font = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "arial.ttf"
+        if system_font.is_file():
+            font_option = f":fontfile='{_safe_filter_path(system_font)}'"
+
     def frame(path):
-        vf = f"drawtext=textfile='{_safe_filter_path(path)}':expansion=none:fontcolor=white:fontsize=24"
+        vf = (
+            f"drawtext=textfile='{_safe_filter_path(path)}':expansion=none"
+            f"{font_option}:fontcolor=white:fontsize=24"
+        )
         return subprocess.run(
             ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=black:s=640x160:d=0.1",
              "-vf", vf, "-frames:v", "1", "-pix_fmt", "gray", "-f", "rawvideo", "-"],

@@ -31,7 +31,15 @@ source .venv/bin/activate
 python -m pip install -r requirements-generator.txt
 ```
 
-Повне середовище OpenMontage (Backlot, Remotion, усі провайдери): `make setup`.
+Повне середовище OpenMontage (Backlot, Remotion, HyperFrames, усі провайдери): `make setup`.
+
+> **Windows ім'я користувача з кирилицею.** Для повного прогону `make test` на цій машині встановлено змінні користувача:
+> `PYTHONUTF8=1` (UTF-8 для concat-лістів ffmpeg), `PYTEST_DEBUG_TEMPROOT=C:/omtest/pytest` і
+> `PYTEST_ADDOPTS=--basetemp=C:/omtest/pytest/base` (ASCII-шляхи для tmp pytest), а також MIME `.webp`
+> у реєстрі (`HKCU\Software\Classes\.webp` → `Content Type = image/webp`). Крім того,
+> `showcase_card` і його тест на Windows передають у `drawtext` конкретний файл шрифту — FFmpeg 9.x
+> падає, коли шрифт шукається через fontconfig. Тест `make ensure-venv` з пробілом у шляху також
+> очищає успадковані `MAKEFLAGS`: локалізований вивід GnuWin32 make (cp1251) ламає UTF-8-декодування.
 
 ## Запуск
 

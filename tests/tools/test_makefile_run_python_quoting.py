@@ -60,12 +60,21 @@ def test_ensure_venv_succeeds_when_the_venv_path_contains_spaces(tmp_path):
     fake_python.chmod(fake_python.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
     env = {**os.environ, "VIRTUAL_ENV": str(workdir / ".venv"), "CONDA_PREFIX": ""}
+    # When this test runs under `make test`, make exports MAKEFLAGS=w to the
+    # pytest process. A nested make then prints its localized "Entering
+    # directory" line in the host code page (cp1251 here), which cannot be
+    # decoded as UTF-8 when text=True. This is a fresh, independent make
+    # invocation, so drop the inherited recursion flags.
+    for key in ("MAKEFLAGS", "MAKELEVEL", "MFLAGS"):
+        env.pop(key, None)
     proc = subprocess.run(
         ["make", "ensure-venv"],
         cwd=workdir,
         env=env,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=120,
     )
 

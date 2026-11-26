@@ -98,6 +98,24 @@ def _safe_filter_path(path: Path) -> str:
     return encoded.replace("'", "'\\''")
 
 
+def _resolve_font_file(font: str) -> str:
+    """Return a concrete font path when possible on Windows.
+
+    FFmpeg 9.x crashes (0xC0000005) when drawtext has to resolve a font family
+    through fontconfig on Windows. Emitting a real font file avoids that path.
+    Bare names that are not installed stay unchanged so fontconfig can still
+    try them on other platforms.
+    """
+    if os.name != "nt":
+        return font
+    roots = (Path("C:/Windows/Fonts"), Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts")
+    for root in roots:
+        candidate = root / font
+        if candidate.is_file():
+            return _safe_filter_path(candidate)
+    return font
+
+
 class ShowcaseCard(BaseTool):
     name = "showcase_card"
     version = "0.1.0"
@@ -211,6 +229,9 @@ class ShowcaseCard(BaseTool):
         except ValueError as e:
             return ToolResult(success=False, error=str(e))
 
+        title_font = _resolve_font_file(title_font)
+        subtitle_font = _resolve_font_file("segoeui.ttf")
+
         if not Path(input_path).exists():
             return ToolResult(success=False, error=f"Input not found: {input_path}")
 
@@ -263,7 +284,7 @@ class ShowcaseCard(BaseTool):
                 subtitle_path = _write_drawtext_textfile(text_tmp_dir, subtitle)
                 filters.append(
                     f"drawtext=textfile='{_safe_filter_path(subtitle_path)}':expansion=none"
-                    f":fontfile='segoeui.ttf'"
+                    f":fontfile='{subtitle_font}'"
                     f":fontsize={subtitle_font_size}"
                     f":fontcolor=white@0.85"
                     f":x=(w-text_w)/2:y=h-100"
@@ -274,7 +295,7 @@ class ShowcaseCard(BaseTool):
                 watermark_path = _write_drawtext_textfile(text_tmp_dir, watermark)
                 filters.append(
                     f"drawtext=textfile='{_safe_filter_path(watermark_path)}':expansion=none"
-                    f":fontfile='segoeui.ttf'"
+                    f":fontfile='{subtitle_font}'"
                     f":fontsize=36"
                     f":fontcolor=white@0.3"
                     f":x=(w-text_w)/2:y=(h-text_h)/2"
