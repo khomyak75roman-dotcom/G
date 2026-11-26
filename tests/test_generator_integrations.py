@@ -35,9 +35,11 @@ def test_repo_report_has_all_repo_groups_and_honest_states():
     categories = set(report["categories"])
     assert {
         "tts", "background", "acquisition", "transcription", "local_video",
-        "benchmark", "methodology", "networking",
+        "benchmark", "methodology", "editor", "networking",
     } <= categories
     assert sum(report["counts"].values()) == len(external_repos.REPOS)
+    keys = [item["key"] for item in report["repos"]]
+    assert len(keys) == len(set(keys))
     states = {item["state"] for item in report["repos"]}
     assert states <= {
         "active", "configured", "gpu-required", "not-enabled", "upstream",
@@ -58,7 +60,14 @@ def test_repo_report_has_all_repo_groups_and_honest_states():
 def test_references_and_networking_repos_are_never_activated():
     report = external_repos.report()
     items = {item["key"]: item for item in report["repos"]}
+    assert items["moneyprinter_turbo"]["repo"] == "Harry0703/MoneyPrinterTurbo"
     assert items["moneyprinter_turbo"]["state"] == "reference-only"
+    assert items["moneyprinter_plus"]["license_note"].startswith("GPL")
+    assert items["moneyprinter_v2"]["state"] == "needs-verification"
+    assert items["vimax"]["state"] == "reference-only"
+    assert items["hypit"]["repo"] == "hypit/SVML"
+    assert items["palmier_pro"]["license_note"].startswith("proprietary")
+    assert items["open_edit"]["repo"] == "veedstudio/open-edit"
     assert items["chatterbox"]["state"] == "reference-only"
     assert items["herk_edit_kit"]["state"] == "needs-verification"
     assert items["goodbyedpi"]["state"] == "out-of-scope"
