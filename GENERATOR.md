@@ -61,6 +61,21 @@ python -m generator --list-sources
 python -m generator "city life in the rain" --dry-run
 ```
 
+### Ярлик на робочому столі (Windows)
+
+На цій машині створено ярлик **OpenMontage Generator.lnk**: подвійний клік відкриває вікно вводу теми, генерує MP4 у `projects/desktop/` і відкриває готовий файл. Логіка — у `launch_generator.ps1` (корінь репозиторію); ярлик запускає його через PowerShell з `-ExecutionPolicy Bypass`. Щоб перестворити ярлик на іншій машині:
+
+```powershell
+$root = "C:\шлях\до\OpenMontage"
+$link = Join-Path ([Environment]::GetFolderPath('Desktop')) 'OpenMontage Generator.lnk'
+$s = (New-Object -ComObject WScript.Shell).CreateShortcut($link)
+$s.TargetPath = Join-Path $PSHOME 'powershell.exe'
+$s.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $root 'launch_generator.ps1') + '"'
+$s.WorkingDirectory = $root
+$s.IconLocation = (Join-Path $root '.venv\Scripts\python.exe') + ',0'
+$s.Save()
+```
+
 Основні опції:
 
 | Опція | Що робить |
