@@ -89,6 +89,67 @@ $s.Save()
 | `--offline` | Не звертатися до мережі за кліпами |
 | `--no-audio`, `--no-subtitles` | Вимкнути озвучку / субтитри |
 | `--timeout SEC` | Ліміт часу пошуку кліпів (за замовчуванням 180) |
+| `--repos` | Показати стан усіх репозиторіїв (runtime / read-only / out-of-scope) |
+| `--network-check` | Перевірити доступність keyless-джерел через поточне оточення |
+
+## Мережа й проксі
+
+Генератор не встановлює й не активує VPN, анти-DPI, proxy-pools, Telegram-транзит
+або інші засоби обходу обмежень. Він лише поважає стандартні змінні оточення
+`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY` (і їхні нижньорегістрові
+варіанти), які вже використовують `requests`, `yt-dlp` і `gallery-dl`.
+
+```powershell
+# Перевірити, чи доступні Wikimedia / NASA / Archive.org через ваш проксі
+python -m generator --network-check
+```
+
+Значення проксі ніколи не друкуються: у звіті лишаються лише схема, хост і порт
+(без логіна/пароля). Мережеві репозиторії зі списку вище залишаються `out-of-scope`.
+
+## Інтегровані open-source репозиторії
+
+Повний перелік і реальний стан (встановлено / потребує GPU / потребує URL / не увімкнено / лише для читання / поза межами генератора):
+
+```powershell
+python -m generator --repos
+```
+
+| Група | Репозиторії | Як використовуються |
+|-------|-------------|---------------------|
+| TTS-драбина `tts_save` | `rany2/edge-tts`, `rhasspy/piper`, `rhasspy/piper-voices`, `hexgrad/kokoro` | `auto`: edge → Piper (локальний `uk_UA`, CPU, MIT) → Kokoro → Windows SAPI → тиша. `--tts piper --piper-voice uk_UA-tetiana-high` примусово використає Piper |
+| GPU TTS | `OpenBMB/VoxCPM2`, `leemysw/yovoice` | `VoxCPM2` — Apache-2.0 код+ваги, мультимовний cloning-TTS; обидва активуються лише з CUDA/MPS і шляхом (`VOXCPM2_REPO`, `YOVOICE_REPO`) |
+| Заміна фону | `danielgatis/rembg`, `PeterL1n/RobustVideoMatting`, `xuebinqin/U-2-Net`, `google-ai-edge/mediapipe`, `backgroundremover` | `--remove-bg` (rembg `u2net` через ffmpeg raw-пайп), `--bg-engine selfie` для MediaPipe, `--selfie-preview` для прев'ю; фолбек — ffmpeg chromakey |
+| Завантаження/пошук | `yt-dlp/yt-dlp`, `imputnet/cobalt`, `mikf/gallery-dl`, `searxng/searxng`, `WordPress/openverse` | URL-ланцюжок yt-dlp → cobalt → gallery-dl; SearxNG — опційний `--sources searxng` (потрібен `SEARXNG_URL`); Openverse уже в stock-адаптерах |
+| Переклад | `LibreTranslate/LibreTranslate` | `--translate en` перекладає текст SRT, не змінюючи таймкоди; `LIBRETRANSLATE_URL` (типово `http://localhost:5000`) |
+| Транскрипція | `Graphify-Labs/graphify`, `SYSTRAN/faster-whisper`, `m-bain/whisperX` | Патерн `faster-whisper + yt-dlp`: `--transcribe FILE\|URL --whisper-model tiny`; `--remove-pauses` стискає довгі паузи в таймкодах; whisperX — опційний вирівнювач |
+| Локальне відео | `lllyasviel/FramePack`, `Tencent-Hunyuan/HunyuanVideo`, `zai-org/CogVideo`, `Lightricks/LTX-Video`, `Wan-Video/Wan2.2`, `LTX/Wan2GP`, `AlibabaCloud-Official/Wan3.0`, `Stability-AI/generative-models`, `duixcom/Duix-Avatar`, `wide-trace/open-higgsfield`, `kandinskylab/kandinsky-5` | Каталоговані статус-адаптери; активуються шляхом `*_REPO` за наявності CUDA/MPS. FramePack — головний кандидат (~6 GB VRAM), Duix-Avatar — офлайн-ведучий. На цій машині GPU немає |
+| Бенчмарки (read-only) | `harry0703/MoneyPrinterTurbo`, `HKUDS/ViMax`, `lcy362/agnes-video-generator`, `YILS-LIN/short-video-factory`, `ddean2009/MoneyPrinterPlus`, `calesthio/OpenMontage`, `Resemble-AI/Chatterbox` | Порівняння фіч і методологій; код не імпортується. Для `MoneyPrinterPlus` (GPL + заборона комерції) і `OpenMontage` (AGPL) читати тільки README; Chatterbox — RETIRED |
+| Методології (read-only) | `affaan-m/ECC`, `polishuk01/shuohao-skills`, `digitalsamba/claude-code-video-toolkit`, `JuneYaooo/capsule-cinema`, `darkzOGx/youtube-automation-agent`, `h4ckf0r0day/Obscura` та ін. | Джерела гейтів, self-QC, Memory Vault, outline→script→staging→storyboard. Репозиторії з непідтвердженим owner позначені `needs-verification` і не клонуються автоматично |
+
+Мережеві репозиторії з «Партії 26» (VPN/DPI/proxy/tunnel/Telegram-транзит/rclone/R2)
+занесені в каталог як `out-of-scope`. Генератор не обходить обмеження мережі,
+не ротує проксі й не використовує сторонні тунелі; ці записи існують лише для
+повноти обліку й ніколи не активуються.
+
+### Практичні приклади
+
+```powershell
+# Українська озвучка повністю локально (перший запуск завантажить голос Piper)
+python -m generator "чому небо синє" --tts piper --offline --out local.mp4
+
+# Заміна фону на однотонний колір + прибирання пауз
+python -m generator "місто в дощі" --remove-bg --bg-color "#122033" --remove-pauses
+
+# Транскрипція наявного відео (без ключів, локальна модель faster-whisper)
+python -m generator --transcribe "C:\шлях\до\video.mp4" --whisper-model tiny --dry-run
+```
+
+Базовий CLI лишається keyless: додаткові пакети встановлюються окремо через
+`pip install -r requirements-generator-optional.txt`, а за їх відсутності
+відповідний крок тихо пропускається. Змінні оточення для опційних сервісів
+(`SEARXNG_URL`, `LIBRETRANSLATE_URL`, `COBALT_API_URL`, `PIPER_VOICES_DIR`,
+`*_REPO`) описані в `.env.example`.
 
 ## Результат
 
@@ -109,7 +170,10 @@ projects/<project-id>/
 ## Архітектура
 
 - `generator/script.py` — детерміністичний сценарій без LLM.
-- `generator/speech.py` — TTS з fail-open ланцюжком і послівними таймкодами.
+- `generator/speech.py` — TTS-драбина `tts_save` (edge → Piper → Kokoro → SAPI → тиша) з fail-open і послівними таймкодами.
+- `generator/external_repos.py` — каталог і перевірка стану всіх репозиторіїв: runtime, бенчмарки, методології та `out-of-scope` мережеві записи.
+- `generator/background.py`, `generator/pause_removal.py`, `generator/translation.py`,
+  `generator/transcription.py`, `generator/downloads.py` — опційні локальні адаптери.
 - `generator/media.py` — `tools.video.direct_clip_search.DirectClipSearch` + локальний fallback.
 - `generator/render.py` — `tools.subtitle.subtitle_gen.SubtitleGen` + `tools.video.video_compose.VideoCompose` (`operation="compose"`, FFmpeg, без Node).
 - `generator/cli.py` — оркестрація, проєктний простір і звіт.

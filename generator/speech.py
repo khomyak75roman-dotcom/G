@@ -1,16 +1,22 @@
 """Narration with word-level timings and fail-open fallbacks.
 
-Priority: edge-tts (free, no key, word boundaries) -> Windows SAPI (offline)
+TTS ladder: edge-tts (free, no key, native word boundaries) -> Piper (local
+CPU, Ukrainian voices) -> Kokoro (optional GPU tier) -> Windows SAPI (offline)
 -> generated silence. The generator never fails only because TTS is missing.
+
+Upstream repos: rany2/edge-tts, rhasspy/piper, rhasspy/piper-voices,
+hexgrad/kokoro. See ``generator/external_repos.py`` for the full catalogue.
 """
 from __future__ import annotations
 
 import asyncio
 import base64
 import json
+import os
 import shutil
 import subprocess
 import tempfile
+import wave
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any
@@ -19,6 +25,10 @@ from .script import detect_language
 
 
 DEFAULT_VOICES = {"uk": "uk-UA-PolinaNeural", "en": "en-US-AriaNeural"}
+PIPER_VOICES = {"uk": "uk_UA-lada-x_low", "en": "en_US-lessac-medium"}
+KOKORO_VOICES = {"en": "af_heart"}
+TTS_BACKENDS = ("auto", "edge", "piper", "kokoro", "sapi")
+TTS_LADDER = "tts_save"
 
 
 @dataclass
@@ -95,6 +105,129 @@ def _edge_tts(text: str, voice: str, output: Path, rate: str) -> list[dict[str, 
         return None
 
 
+def _piper_data_dir() -> Path | None:
+    """Point the compiled espeak bridge at an ASCII-only data directory.
+
+    piper's Windows extension reads ``ESPEAK_DATA_PATH`` from the process
+    environment.  A Cyrillic user profile (e.g. C:\\Users\\Роман) is mangled by
+    that bridge, so the bundled data is mirrored to an ASCII location once.
+    """
+    try:
+        import piper
+    except ImportError:
+        return None
+    bundled = Path(piper.__file__).parent / "espeak-ng-data"
+    override = os.environ.get("OM_ESPEAK_DATA", "").strip()
+    if override:
+        target = Path(override)
+    elif os.name == "nt":
+        try:
+            str(bundled).encode("ascii")
+            target = bundled
+        except UnicodeEncodeError:
+            drive = os.environ.get("SystemDrive", "C:").rstrip(":")
+            target = Path(f"{drive}:/omtest/piper/espeak-ng-data")
+    else:
+        target = bundled
+    try:
+        if target.resolve() != bundled.resolve() and bundled.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+            if not (target / "phontab").exists():
+                shutil.copytree(bundled, target, dirs_exist_ok=True)
+    except Exception:
+        return None
+    os.environ["ESPEAK_DATA_PATH"] = str(target)
+    return target
+
+
+def _write_wav(samples: bytes, output: Path, sample_rate: int) -> None:
+    with wave.open(str(output), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate)
+        handle.writeframes(samples)
+
+
+def _piper(text: str, output: Path, model: str, voices_dir: Path | None = None) -> bool:
+    """Local CPU tier using rhasspy/piper + piper-voices (no API key)."""
+    try:
+        from piper import PiperVoice
+        from piper.download_voices import download_voice
+    except ImportError:
+        return False
+    data_dir = _piper_data_dir()
+    if data_dir is None:
+        return False
+    voice_dir = voices_dir or Path(
+        os.environ.get("PIPER_VOICES_DIR", str(Path.home() / ".piper" / "models"))
+    )
+    wav_path = output.with_name(output.stem + ".piper.wav")
+    try:
+        voice_dir.mkdir(parents=True, exist_ok=True)
+        download_voice(model, voice_dir)
+        model_path = voice_dir / f"{model}.onnx"
+        config_path = voice_dir / f"{model}.onnx.json"
+        if not model_path.exists():
+            return False
+        voice = PiperVoice.load(model_path, config_path=config_path, espeak_data_dir=data_dir)
+        audio = bytearray()
+        sample_rate = voice.config.sample_rate
+        for chunk in voice.synthesize(text):
+            audio.extend(chunk.audio_int16_bytes)
+        if not audio:
+            return False
+        _write_wav(bytes(audio), wav_path, sample_rate)
+        if output.suffix.lower() == ".wav":
+            shutil.move(str(wav_path), str(output))
+        else:
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", str(wav_path), "-c:a", "libmp3lame",
+                 "-q:a", "4", str(output)],
+                check=True, capture_output=True,
+            )
+        return output.exists() and output.stat().st_size > 1024
+    except Exception:
+        return False
+    finally:
+        wav_path.unlink(missing_ok=True)
+
+
+def _kokoro(text: str, output: Path, lang: str) -> bool:
+    """Optional hexgrad/kokoro tier; activates only when kokoro is installed."""
+    if lang != "en":
+        return False
+    try:
+        import numpy as np
+        from kokoro import KPipeline
+    except ImportError:
+        return False
+    wav_path = output.with_name(output.stem + ".kokoro.wav")
+    try:
+        pipeline = KPipeline(lang_code="a")
+        voice = os.environ.get("KOKORO_VOICE", KOKORO_VOICES["en"])
+        parts: list[np.ndarray] = []
+        for _graphemes, _phonemes, audio in pipeline(text, voice=voice):
+            parts.append(np.asarray(audio).reshape(-1))
+        if not parts:
+            return False
+        samples = np.concatenate(parts)
+        pcm = np.clip(samples * 32767, -32768, 32767).astype("<i2").tobytes()
+        _write_wav(pcm, wav_path, 24000)
+        if output.suffix.lower() == ".wav":
+            shutil.move(str(wav_path), str(output))
+        else:
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", str(wav_path), "-c:a", "libmp3lame",
+                 "-q:a", "4", str(output)],
+                check=True, capture_output=True,
+            )
+        return output.exists() and output.stat().st_size > 1024
+    except Exception:
+        return False
+    finally:
+        wav_path.unlink(missing_ok=True)
+
+
 def _windows_sapi(text: str, output: Path) -> bool:
     if not shutil.which("powershell"):
         return False
@@ -143,18 +276,42 @@ def synthesize(
     voice: str | None = None,
     language: str | None = None,
     rate: str = "+0%",
+    backend: str = "auto",
+    piper_voice: str | None = None,
 ) -> SpeechResult:
-    """Synthesize narration and return audio duration + word timings."""
+    """Synthesize narration and return audio duration + word timings.
+
+    ``backend="auto"`` walks the full ladder; an explicit backend tries only
+    that tier and still falls back to silence so the CLI never hard-fails.
+    """
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     lang = language or detect_language(text)
     chosen_voice = voice or DEFAULT_VOICES.get(lang, DEFAULT_VOICES["en"])
+    if backend not in TTS_BACKENDS:
+        raise ValueError(f"Unknown TTS backend: {backend}")
+    allowed = TTS_BACKENDS[1:] if backend == "auto" else (backend,)
 
-    words = _edge_tts(text, chosen_voice, output, rate)
-    engine = "edge-tts"
-    if words is None and _windows_sapi(text, output):
+    words: list[dict[str, Any]] | None = None
+    engine = "silence"
+    if "edge" in allowed:
+        words = _edge_tts(text, chosen_voice, output, rate)
+        if words is not None:
+            engine = "edge-tts"
+    if words is None and "piper" in allowed:
+        model = piper_voice or PIPER_VOICES.get(lang, PIPER_VOICES["en"])
+        if _piper(text, output, model):
+            engine = "piper"
+            words = []
+            chosen_voice = model
+    if words is None and "kokoro" in allowed and _kokoro(text, output, lang):
+        engine = "kokoro"
+        words = []
+        chosen_voice = os.environ.get("KOKORO_VOICE", KOKORO_VOICES.get(lang, ""))
+    if words is None and "sapi" in allowed and _windows_sapi(text, output):
         engine = "windows-sapi"
         words = []
+
     if not output.exists() or output.stat().st_size < 1024:
         duration = _silence(text, output)
         engine = "silence"

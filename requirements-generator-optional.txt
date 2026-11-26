@@ -1,0 +1,18 @@
+# Optional local backends for the keyless generator.
+# The base CLI (requirements-generator.txt) still works without any of these.
+#
+#   pip install -r requirements-generator-optional.txt
+#
+# TTS tier 2 (Ukrainian Piper voices are downloaded on first use):
+piper-tts>=1.8
+# TTS tier 3 (optional GPU/CPU Kokoro voice):
+kokoro>=0.9.2
+# Background replacement (rembg / U-2-Net models) and selfie preview:
+rembg>=2.0.80
+mediapipe>=1.2
+# URL download ladder: yt-dlp -> cobalt -> gallery-dl.
+yt-dlp>=2025.1.1
+gallery-dl>=1.30
+# Local transcription (Graphify video-extra pattern): faster-whisper + yt-dlp.
+faster-whisper>=1.1
+# onnxruntime, numpy, Pillow are already installed by the base setup.
