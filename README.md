@@ -1,5 +1,42 @@
 **English** | [Português (Brasil)](README_pt-BR.md) | [Español](README_es.md) | [简体中文](README_zh-CN.md)
 
+---
+
+## VIDEO COMBINE AI — Phase 1 documentation
+
+> **Status: DRAFT, awaiting approval. No application modules are implemented in this phase.**
+
+VIDEO COMBINE AI is an autonomous YouTube production studio built **on top of** the working OpenMontage keyless core — not as a rewrite. The core path needs **no manually entered API keys**: it uses local FFmpeg, local/open-source models, and open archives. Cloud providers are optional and opt-in; browser authentication is development-only.
+
+**Capability tiers** (every feature is classified):
+
+| Tier | Meaning | Examples |
+|---|---|---|
+| 1 — Offline | No network at all | Project state, FFmpeg cuts/reframe, subtitles, local QC |
+| 2 — Local models/media | One-time model or media download | Piper UA/EN voice, faster-whisper, rembg, Wikimedia/NASA |
+| 3 — User auth | Interactive browser/account login | Mistral browser auth (dev), YouTube OAuth (user-owned media) |
+| 4 — Optional paid | Explicit opt-in + budget cap | FAL, ElevenLabs, OpenAI, Gemini |
+
+Cloud AI is **not** claimed to work without credentials.
+
+**Architecture documents** (branch `feature/project-foundation`):
+
+- [PRD.md](PRD.md) — product requirements and capability tiers
+- [docs/architecture.md](docs/architecture.md) — layer model and flows
+- [docs/agent-architecture.md](docs/agent-architecture.md) — Orchestrator + 10 agents
+- [docs/skills-architecture.md](docs/skills-architecture.md) — runtime skills vs coding-agent skills
+- [docs/video-pipeline.md](docs/video-pipeline.md) — FFmpeg core, tool evaluation, clip workflow
+- [docs/technology-stack.md](docs/technology-stack.md) — current and planned stack
+- [docs/security.md](docs/security.md) — keyless, redaction, network policy
+- [docs/copyright-and-licensing.md](docs/copyright-and-licensing.md) — rights gate, attribution, no metadata deception
+- [docs/development-roadmap.md](docs/development-roadmap.md) — phases 0–10
+- [docs/installation.md](docs/installation.md) — reproducible setup on a separate machine
+- [docs/decisions/ADR-001-architecture.md](docs/decisions/ADR-001-architecture.md) — architecture decision record
+
+The original OpenMontage quickstart and documentation below remain valid; the keyless CLI is the regression baseline.
+
+---
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/monty-dark.svg">
